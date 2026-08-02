@@ -13,7 +13,7 @@ releases:
     namespace: penpot
     chart: penpot/penpot
     # Pin the chart version. Latest available: see `helm search repo penpot/penpot --versions`.
-    version: 0.32.0
+    version: 1.7.0
     # Create the `penpot` namespace on first install.
     createNamespace: true
     values:

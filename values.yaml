@@ -2,21 +2,10 @@
 ## Default values for Penpot
 
 global:
-  # -- Whether to deploy the Bitnami PostgreSQL chart as subchart. Check [the official chart](https://artifacthub.io/packages/helm/bitnami/postgresql) for configuration.
-  # @section -- Global parameters
-  postgresqlEnabled: false
-  # -- Whether to deploy the Bitnami Valkey chart as subchart. Check [the official chart](https://artifacthub.io/packages/helm/bitnami/valkey) for configuration.
-  # @section -- Global parameters
-  valkeyEnabled: true
-  # -- Whether to deploy the Bitnami Redis chart as subchart. Check [the official chart](https://artifacthub.io/packages/helm/bitnami/redis) for configuration.
-  # *DEPRECATION WARNING: Since Penpot 2.8, Penpot has migrated from Redis to Valkey. Although migration is recommended, Penpot will work seamlessly with compatible Redis versions. 
-  # @section -- Global parameters
-  redisEnabled: false
-  # -- Global Docker registry secret names.
-  # E.g.
-  # imagePullSecrets:
-  #   - myRegistryKeySecretName
-  # @section -- Global parameters
+  # Bitnami subcharts were removed in chart v1.0.0. We use external PostgreSQL
+  # (DigitalOcean managed) and a stand-alone Valkey StatefulSet (was deployed by
+  # the old chart's subchart; now detached from Helm with
+  # `helm.sh/resource-policy: keep` — see README "Valkey after chart v1.0").
   imagePullSecrets: []
 
 # -- To partially override common.names.fullname
@@ -364,13 +353,19 @@ backend:
     repository: penpotapp/backend
     # -- The image tag to use.
     # @section -- Backend parameters
-    tag: 2.12.1
+    tag: 2.17.0
     # -- The image pull policy to use.
     # @section -- Backend parameters
     pullPolicy: IfNotPresent
   # -- The number of replicas to deploy.
   # @section -- Backend parameters
   replicaCount: 1
+  # -- Deployment update strategy. `Recreate` is required because the backend
+  # mounts the same RWO PVC as the frontend (`penpot-data-assets`) and the
+  # node is memory-constrained; RollingUpdate competes for both the volume
+  # and for memory during pod handover, leading to eviction deadlocks.
+  updateStrategy:
+    type: Recreate
   service:
     # -- The http service type to create.
     # @section -- Backend parameters
@@ -459,13 +454,17 @@ frontend:
     repository: penpotapp/frontend
     # -- The image tag to use.
     # @section -- Frontend parameters
-    tag: 2.12.1
+    tag: 2.17.0
     # -- The image pull policy to use.
     # @section -- Frontend parameters
     pullPolicy: IfNotPresent
   # -- The number of replicas to deploy.
   # @section -- Frontend parameters
   replicaCount: 1
+  # -- Deployment update strategy. Same rationale as backend: shares the
+  # `penpot-data-assets` RWO PVC.
+  updateStrategy:
+    type: Recreate
   service:
     # -- The service type to create.
     # @section -- Frontend parameters
@@ -546,7 +545,7 @@ exporter:
     repository: penpotapp/exporter
     # -- The image tag to use.
     # @section -- Exporter parameters
-    tag: 2.12.1
+    tag: 2.17.0
     # -- The image pull policy to use.
     # @section -- Exporter parameters
     imagePullPolicy: IfNotPresent
@@ -717,58 +716,14 @@ ingress:
       hosts:
         - design.glia.org
 
-gatewayApi:
-  # The chart's built-in gatewayApi block creates a *new* Gateway in this
-  # namespace, which would spin up an additional LoadBalancer (~$12/mo on
-  # DigitalOcean). Instead we attach to the cluster's shared `public-gateway`
-  # in the ingress-nginx namespace — see gateway/ manifests and
-  # scripts/apply-gateway.sh. Matches the pattern used by moodle/hikma/MLT.
-  enabled: false
+# gatewayApi: removed in chart v1.0. We manage Gateway API ourselves
+# via the shared public-gateway. See gateway/ manifests and
+# scripts/apply-gateway.sh. The block below was the chart's own (disabled)
+# config, kept for reference; v1.x of the chart no longer ships it.
 
-  # Where your Gateway will live. Usually the same namespace as the app.
-  gateway:
-    name: design-glia-org
-    gatewayClassName: nginx            # change to your GatewayClass (e.g., istio, traefik, contour, etc.)
-
-    listeners:
-      - name: https
-        hostname: design.glia.org
-        port: 443
-        protocol: HTTPS
-        tls:
-          mode: Terminate
-          certificateRefs:
-            - kind: Secret
-              name: design-glia-org-tls
-
-  httpRoute:
-    name: design-glia-org
-    hostnames:
-      - design.glia.org
-    parentRefs:
-      - name: design-glia-org
-    rules:
-      - matches:
-          - path:
-              type: PathPrefix
-              value: /
-        backendRefs:
-          # IMPORTANT: set this to the actual frontend Service name created by the chart.
-          # The penpot chart names it after the release, so it's just "penpot".
-          - name: penpot
-            port: 8080
-
-# Let’s Encrypt TLS (cert-manager ACME; “certbot-like” automation for Kubernetes)
-tls:
-  certManager:
-    enabled: true
-    issuerRef:
-      name: letsencrypt-prod           # must exist (ClusterIssuer or Issuer)
-      kind: ClusterIssuer
-    certificate:
-      secretName: design-glia-org-tls
-      dnsNames:
-        - design.glia.org
+# TLS: removed chart-managed cert-manager block. The Certificate is now
+# applied directly via scripts/apply-certificate.sh (or left as an orphan
+# from the previous chart version; cert-manager keeps it running).
 
 route:
   # -- Enable Openshift/OKD Route. Check [the official doc](https://docs.openshift.com/container-platform/4.16/networking/routes/route-configuration.html). When it is enabled, all fsGroup and runAsUser must be changed to null.
@@ -794,100 +749,7 @@ route:
   # @section -- Route parameters
   wildcardPolicy: None
 
-# PostgreSQL configuration (Check for [more parameters here](https://artifacthub.io/packages/helm/bitnami/postgresql))
-postgresql:
-  image:
-    repository: bitnamilegacy/postgresql
-    tag: "16.4.0-debian-12-r14"
-  global:
-    compatibility:
-      openshift:
-        # -- Adapt the securityContext sections of the deployment to make them compatible with Openshift restricted-v2 SCC: remove runAsUser, runAsGroup and fsGroup and let the platform use their allowed default IDs. Possible values: auto (apply if the detected running cluster is Openshift), force (perform the adaptation always), disabled (do not perform adaptation)
-        # @section -- PostgreSQL Dependencie parameters
-        adaptSecurityContext: "auto"
-
-  auth:
-    # -- Name for a custom user to create.
-    # @section -- PostgreSQL Dependencie parameters
-    username: "penpot"
-    # -- Password for the custom user to create.
-    # @section -- PostgreSQL Dependencie parameters
-    password: "penpot"
-    # -- Name for a custom database to create.
-    # @section -- PostgreSQL Dependencie parameters
-    database: "penpot"
-
-# Valkey configuration (Check for [more parameters here](https://artifacthub.io/packages/helm/bitnami/valkey))
-valkey:
-  image:
-    repository: bitnamilegacy/valkey
-    tag: "8.1.3-debian-12-r3"
-  global:
-    compatibility:
-      openshift:
-        # -- Adapt the securityContext sections of the deployment to make them compatible with Openshift restricted-v2 SCC: remove runAsUser, runAsGroup and fsGroup and let the platform use their allowed default IDs. Possible values: auto (apply if the detected running cluster is Openshift), force (perform the adaptation always), disabled (do not perform adaptation)
-        # @section -- Valkey Dependencie parameters
-        adaptSecurityContext: "auto"
-  auth:
-    # -- Whether to enable password authentication.
-    # @section -- Valkey Dependencie parameters
-    enabled: false
-  # -- Valkey architecture. Allowed values: `standalone` or `replication`. Penpot only needs a standalone Valkey StatefulSet. Check for [more info here](https://artifacthub.io/packages/helm/bitnami/vlakey#cluster-topologies)
-  # @section -- Valkey Dependencie parameters
-  architecture: standalone
-  # -- Common configuration to be appended to valkey.conf (as a block of configuration lines).
-  # @section -- Valkey Dependencie parameters
-  commonConfiguration: |
-    ## Recommended values for most Penpot instances. 
-    ## You can modify this value to follow your policies.
-
-    # Set maximum memory Valkey will use.
-    # Accepted units: b, k, kb, m, mb, g, gb
-    maxmemory 128mb
-
-    # Choose an eviction policy (see Valkey docs:
-    # https://valkey.io/topics/memory-optimization/)
-    # Common choices:
-    #   noeviction, allkeys-lru, volatile-lru, allkeys-random, volatile-random,
-    #   volatile-ttl, volatile-lfu, allkeys-lfu
-    #
-    # For Penpot, volatile-lfu is recommended
-    maxmemory-policy volatile-lfu
-
-# Redis configuration (Check for [more parameters here](https://artifacthub.io/packages/helm/bitnami/redis))
-# DEPRECATION WARNING: Since Penpot 2.8, Penpot has migrated from Redis to Velkey. Although migration is recommended. Penpot will work seamlessly with compatible Redis versions. 
-redis:
-  image:
-    repository: bitnamilegacy/redis
-    tag: "7.2.5-debian-12-r4"
-  global:
-    compatibility:
-      openshift:
-        # -- Adapt the securityContext sections of the deployment to make them compatible with Openshift restricted-v2 SCC: remove runAsUser, runAsGroup and fsGroup and let the platform use their allowed default IDs. Possible values: auto (apply if the detected running cluster is Openshift), force (perform the adaptation always), disabled (do not perform adaptation)
-        # @section -- Redis Dependencie parameters
-        adaptSecurityContext: "auto"
-  auth:
-    # -- Whether to enable password authentication.
-    # @section -- Redis Dependencie parameters
-    enabled: false
-  # -- Redis® architecture. Allowed values: `standalone` or `replication`. Penpot only needs a standalone Redis® StatefulSet. Check for [more info here](https://artifacthub.io/packages/helm/bitnami/redis#cluster-topologies)
-  # @section -- Redis Dependencie parameters
-  architecture: standalone
-  # -- Common configuration to be appended to redis.conf (as a block of configuration lines).
-  # @section -- Redis Dependencie parameters
-  commonConfiguration: |
-    ## Recommended values for most Penpot instances.
-    ## You can modify this value to follow your policies.
-
-    # Set maximum memory Redis will use.
-    # Accepted units: b, k, kb, m, mb, g, gb
-    maxmemory 128mb
-
-    # Choose an eviction policy (see Redis docs:
-    # https://redis.io/docs/latest/develop/reference/eviction/)
-    # Common choices:
-    #   noeviction, allkeys-lru, volatile-lru, allkeys-random, volatile-random,
-    #   volatile-ttl, volatile-lfu, allkeys-lfu
-    #
-    # For Penpot, volatile-lfu is recommended
-    maxmemory-policy volatile-lfu
+# PostgreSQL / Valkey / Redis subchart configuration blocks were removed.
+# Chart v1.0 dropped Bitnami subchart support. The existing in-cluster
+# Valkey StatefulSet persists (annotated `helm.sh/resource-policy: keep`).
+# External PostgreSQL credentials live in the `penpot-postgres-secret` Secret.

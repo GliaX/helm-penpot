@@ -11,16 +11,17 @@ sensitive is (or should ever be) committed here.
 
 | Component         | Choice                                                                 |
 | ----------------- | ---------------------------------------------------------------------- |
-| Chart             | `penpot/penpot` v0.32.0 (app v2.12.1), pinned in `helmfile.yaml`       |
+| Chart             | `penpot/penpot` v1.7.0 (app v2.17.0), pinned in `helmfile.yaml`        |
 | Namespace         | `penpot` (auto-created by helmfile)                                    |
 | Frontend ingress  | **Gateway API** — attaches a listener to the shared `public-gateway` in `ingress-nginx` (same pattern as moodle / hikma / mappinglandtheft). The classic Ingress is disabled. |
 | Gateway LB IP     | `152.42.146.7` (DigitalOcean LB `public-gateway-nginx`)                |
-| TLS               | cert-manager Certificate `design-glia-org` → Secret `design-glia-org-tls` in `penpot` ns, via `letsencrypt-prod` ClusterIssuer |
+| TLS               | cert-manager Certificate `design-glia-org` → Secret `design-glia-org-tls` in `penpot` ns, via `letsencrypt-prod` ClusterIssuer. The Certificate is detached from Helm (`helm.sh/resource-policy: keep`) because chart v1.0+ dropped its `tls.certManager` block. |
 | Database          | External managed PostgreSQL on DigitalOcean (Tor1)                     |
-| Cache             | In-cluster Valkey (Bitnami subchart, `standalone`, no auth)            |
+| Cache             | In-cluster Valkey StatefulSet `penpot-valkey-primary` (was deployed by the old chart's Bitnami subchart; detached from Helm with `helm.sh/resource-policy: keep` since chart v1.0 dropped Bitnami subcharts). |
 | Object storage    | DigitalOcean Spaces (S3) — bucket `glia-design` in `tor1`              |
 | Auth              | LDAP against `auth.emlondon.ca:389` with StartTLS                      |
 | File data backend | `storage` (assets go to S3 instead of the DB)                          |
+| Rollout strategy  | `Recreate` for backend + frontend. Both share the `penpot-data-assets` RWO PVC, and the nodes are memory-constrained, so `RollingUpdate` deadlocks (multi-attach errors + evictions). |
 
 ## Repo layout
 
@@ -136,8 +137,31 @@ kubectl -n penpot get secret penpot-api-secret -o jsonpath='{.data.apiSecretKey}
 1. Check available versions: `helm search repo penpot/penpot --versions`
 2. Read the upstream [release notes](https://github.com/penpot/penpot/releases) for breaking changes
 3. Update `version:` in `helmfile.yaml`
-4. `helmfile diff` to review, then `helmfile apply`
-5. Tag the repo, e.g. `git tag -a chart-1.7.0 -m 'penpot chart 1.7.0 / app 2.17.0'`
+4. If the app version changes, also update the three `tag:` lines in `values.yaml` (backend / frontend / exporter)
+5. `helmfile diff` to review, then `helmfile apply`
+6. Tag the repo, e.g. `git tag -a chart-1.7.0 -m 'penpot chart 1.7.0 / app 2.17.0'`
+
+### Notes on chart v1.0+ upgrades
+
+Chart v1.0.0 dropped Bitnami subchart support. If you're upgrading from chart
+v0.x, read this section first.
+
+- **Valkey** (was a Bitnami subchart): all `penpot-valkey-*` resources were
+  annotated with `helm.sh/resource-policy: keep` so Helm doesn't delete them
+  on upgrade. They now live outside Helm's management. To manage them
+  declaratively going forward, install a separate `bitnami/valkey` release
+  and switch `config.redis.host` in `values.yaml`.
+- **Cert-manager Certificate** (`design-glia-org`): annotated with
+  `helm.sh/resource-policy: keep`. The chart v1.0+ no longer ships a
+  `tls.certManager` block. The existing Certificate keeps running under
+  cert-manager's control.
+- **Validation gate**: chart v1.0+ fails the install if
+  `global.{postgresql,valkey,redis}Enabled` is `true`. Our `values.yaml`
+  has all three removed.
+- **Deployment strategy**: backend and frontend `updateStrategy` is pinned
+  to `Recreate`. They share the `penpot-data-assets` RWO PVC; the default
+  `RollingUpdate` causes eviction deadlocks on this memory-constrained
+  cluster.
 
 ### Rotate a secret
 
