@@ -400,8 +400,21 @@ backend:
     readOnlyRootFilesystem: false
     runAsNonRoot: true
   # -- Affinity for Penpot pods assignment. Check [the official doc](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#affinity-and-anti-affinity)
+  # Pinned to co-locate with the frontend pod: both mount the same RWO PVC
+  # (`penpot-data-assets`), so they must land on the same node. Without this,
+  # the scheduler ignores PVC topology and the backend gets stuck in
+  # ContainerCreating on the wrong node.
   # @section -- Backend parameters
-  affinity: {}
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - penpot-frontend
+          topologyKey: kubernetes.io/hostname
   # -- Node labels for Penpot pods assignment. Check [the official doc](https://kubernetes.io/docs/user-guide/node-selection/)
   # @section -- Backend parameters
   nodeSelector: {}
