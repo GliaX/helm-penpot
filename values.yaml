@@ -545,11 +545,20 @@ frontend:
   # @section -- Frontend parameters
   extraEnvs: []
   # -- Extra volumes to be made available. Check [the official doc](https://kubernetes.io/docs/concepts/storage/volumes/)
+  # Includes the MCP `/messages` nginx override (see mcp-nginx-override.yaml).
   # @section -- Frontend parameters
-  volumes: []
+  volumes:
+    - name: mcp-messages-config
+      configMap:
+        name: penpot-nginx-mcp-messages
+        defaultMode: 420
   # -- Extra volumes to be mounted in the countainer. Check [the official doc](https://kubernetes.io/docs/concepts/storage/volumes/)
   # @section -- Frontend parameters
-  volumeMounts: []
+  volumeMounts:
+    - name: mcp-messages-config
+      mountPath: /etc/nginx/overrides/server.d/zz-mcp-messages.conf
+      subPath: mcp-messages.conf
+      readOnly: true
 
 exporter:
   image:

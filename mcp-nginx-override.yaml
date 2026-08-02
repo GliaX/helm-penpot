@@ -1,0 +1,29 @@
+# Nginx override that adds the `/messages` route for MCP SSE transport.
+#
+# Penpot's MCP server, when an SSE client connects to /mcp/sse, returns the
+# URI "/messages?sessionId=<id>" as the endpoint for POSTing JSON-RPC
+# messages. The chart's built-in mcp-locations.conf only routes /mcp/ws,
+# /mcp/stream and /mcp/sse — not /messages — so SSE clients (e.g. opencode)
+# get a 404 from the SPA fallback when they try to POST.
+#
+# This ConfigMap is mounted into the frontend pod at
+# /etc/nginx/overrides/server.d/zz-mcp-messages.conf (alphabetically after
+# the chart's mcp-locations.conf) via frontend.volumes in values.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: penpot-nginx-mcp-messages
+  namespace: penpot
+data:
+  mcp-messages.conf: |
+    # MCP SSE transport: POST endpoint for JSON-RPC messages.
+    # The URI is returned by the server as an absolute path (/messages?sessionId=...),
+    # so this route must live at the host root, not under /mcp/.
+    location /messages {
+        proxy_pass http://penpot-mcp:4401;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }

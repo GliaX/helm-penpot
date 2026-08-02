@@ -31,6 +31,17 @@ releases:
         command: kubectl
         args: ["delete", "-f", "penpot-resolver-config.yaml", "--ignore-not-found"]
 
+      # MCP SSE transport: nginx override that routes /messages to the MCP
+      # server. Without this, SSE clients get 404 when POSTing JSON-RPC.
+      - name: apply-mcp-nginx-override
+        events: ["presync", "postsync"]
+        command: kubectl
+        args: ["apply", "-f", "mcp-nginx-override.yaml"]
+      - name: delete-mcp-nginx-override
+        events: ["postdelete"]
+        command: kubectl
+        args: ["delete", "-f", "mcp-nginx-override.yaml", "--ignore-not-found"]
+
       # Gateway API: attach design.glia.org to the shared `public-gateway`
       # in ingress-nginx (matches the moodle / hikma / mappinglandtheft pattern).
       # The chart's own gatewayApi block is disabled in values.yaml because it
