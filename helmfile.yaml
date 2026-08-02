@@ -1,0 +1,45 @@
+# yaml-language-server: $schema=https://json.schemastore.org/helmfile
+#
+# Deploy with:  helmfile apply
+# Diff with:    helmfile diff
+# Tear down:    helmfile destroy   (also removes the ConfigMap and Gateway API resources)
+
+repositories:
+  - name: penpot
+    url: https://helm.penpot.app/
+
+releases:
+  - name: penpot
+    namespace: penpot
+    chart: penpot/penpot
+    # Pin the chart version. Latest available: see `helm search repo penpot/penpot --versions`.
+    version: 0.32.0
+    # Create the `penpot` namespace on first install.
+    createNamespace: true
+    values:
+      - values.yaml
+    hooks:
+      # The nginx resolver ConfigMap is mounted into the frontend pod
+      # (as the `resolvers-config` volume) and is not part of the upstream
+      # chart, so we apply it out-of-band. Idempotent on every sync.
+      - name: apply-resolver-configmap
+        events: ["presync", "postsync"]
+        command: kubectl
+        args: ["apply", "-f", "penpot-resolver-config.yaml"]
+      - name: delete-resolver-configmap
+        events: ["postdelete"]
+        command: kubectl
+        args: ["delete", "-f", "penpot-resolver-config.yaml", "--ignore-not-found"]
+
+      # Gateway API: attach design.glia.org to the shared `public-gateway`
+      # in ingress-nginx (matches the moodle / hikma / mappinglandtheft pattern).
+      # The chart's own gatewayApi block is disabled in values.yaml because it
+      # would create a separate Gateway (= separate LoadBalancer).
+      - name: apply-gateway-api
+        events: ["presync", "postsync"]
+        command: bash
+        args: ["scripts/apply-gateway.sh"]
+      - name: cleanup-gateway-api
+        events: ["postdelete"]
+        command: bash
+        args: ["scripts/cleanup-gateway.sh"]

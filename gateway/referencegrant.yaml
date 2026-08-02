@@ -1,0 +1,18 @@
+# ReferenceGrant: allows the shared `public-gateway` (in ingress-nginx) to
+# read the TLS Secret `design-glia-org-tls` from this namespace.
+# Required because Gateway API forbids cross-namespace Secret references
+# without an explicit ReferenceGrant in the Secret's namespace.
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-gateway-tls
+  namespace: penpot
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: ingress-nginx
+  to:
+    - group: ""
+      kind: Secret
+      name: design-glia-org-tls

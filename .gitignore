@@ -1,0 +1,26 @@
+# Editor / IDE
+*.swp
+*.swo
+*~
+.*.swp
+.vscode/
+.idea/
+
+# Local env / overrides
+.env
+.env.*
+*.local
+values.local.yaml
+
+# Helmfile caches
+helmfile.lock
+
+# Backups
+*.bak
+*.orig
+
+# Don't accidentally commit rendered manifests
+rendered/
+
+# OS noise
+.DS_Store
