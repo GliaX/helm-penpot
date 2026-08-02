@@ -33,7 +33,7 @@ config:
   # -- The feature flags to enable. Check [the official docs](https://help.penpot.app/technical-guide/configuration/) for more info.
   # @section -- Configuration parameters
 #  flags: "enable-registration enable-login-with-password disable-email-verification enable-smtp"
-  flags: "enable-login-with-ldap disable-email-verification enable-smtp"
+  flags: "enable-login-with-ldap disable-email-verification enable-smtp enable-mcp"
   # -- A random secret key needed for persistent user sessions. Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(64))"` for example.
   # Used only when `existingSecret` is empty. When `existingSecret` is set, the key is read from that Secret instead.
   # @section -- Configuration parameters
