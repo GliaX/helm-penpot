@@ -452,7 +452,14 @@ backend:
     maxUnavailable:
   # -- Specify any additional environment values you want to provide to the backend container in the deployment according to the [specification](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#environment-variables)
   # @section -- Backend parameters
-  extraEnvs: []
+  # Cap the JDBC pool: the shared DO Postgres cluster has max_connections=100
+  # across penpot/mattermost/moodle/hikma/openproject/peertube. Penpot's
+  # default pool (~40) starved the other apps (seen 2026-09).
+  extraEnvs:
+    - name: PENPOT_DATABASE_MAX_POOL_SIZE
+      value: "8"
+    - name: PENPOT_DATABASE_MIN_POOL_SIZE
+      value: "2"
   # -- Extra volumes to be made available. Check [the official doc](https://kubernetes.io/docs/concepts/storage/volumes/)
   # @section -- Backend parameters
   volumes: []
