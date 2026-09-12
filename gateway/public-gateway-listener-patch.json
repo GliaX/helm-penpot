@@ -1,0 +1,28 @@
+[
+  {
+    "op": "add",
+    "path": "/spec/listeners/-",
+    "value": {
+      "name": "penpot-https",
+      "hostname": "design.glia.org",
+      "port": 443,
+      "protocol": "HTTPS",
+      "tls": {
+        "mode": "Terminate",
+        "certificateRefs": [
+          {
+            "group": "",
+            "kind": "Secret",
+            "name": "design-glia-org-tls",
+            "namespace": "penpot"
+          }
+        ]
+      },
+      "allowedRoutes": {
+        "namespaces": {
+          "from": "All"
+        }
+      }
+    }
+  }
+]

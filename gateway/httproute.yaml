@@ -1,6 +1,6 @@
 # HTTPRoute for penpot, attached to the shared `public-gateway`.
 # `sectionName: penpot-https` must match the listener name added by
-# public-gateway-listener-patch.yaml.
+# public-gateway-listener-patch.json.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

@@ -32,7 +32,7 @@ sensitive is (or should ever be) committed here.
 ├── penpot-resolver-config.yaml       # ConfigMap mounted into the frontend pod
 ├── gateway/
 │   ├── referencegrant.yaml           # RefGrant: lets public-gateway read our TLS Secret
-│   ├── public-gateway-listener-patch.yaml  # Server-side-apply patch adding our listener
+│   ├── public-gateway-listener-patch.json  # Additive JSON patch appending our listener
 │   └── httproute.yaml                # HTTPRoute: design.glia.org → penpot:8080
 ├── scripts/
 │   ├── apply-gateway.sh              # Idempotent: applies the 3 gateway/ files
